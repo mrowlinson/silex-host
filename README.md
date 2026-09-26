@@ -29,8 +29,9 @@ itself draw for this file?* The obvious ways to get it all hurt:
 - **macOS News automation.** Works, and scales to dozens of articles — but
   again server-backed, app-bound, and slow.
 - **News Preview.app.** The one Apple tool that opens local JSON directly —
-  when it doesn't crash, and once you've clicked through its first-launch
-  license gate.
+  but it's Intel-only (x86_64), so on Apple Silicon it runs under Rosetta
+  and crashes on the devices queue (the arm64e-only CoreSimulator can't load
+  into the translated process). Dead end on modern Macs.
 
 `silex-host` sidesteps apps entirely. macOS ships the News layout engine —
 macCatalyst `Silex.framework` plus Tangier text — in `/System/iOSSupport`,
