@@ -27,6 +27,6 @@ blank, they don't error.
 
 - **Server-backed**: you render Apple's live copy, not your local bytes.
   Pair each row with a title check against your corpus JSON when identity
-  matters (see `../mac-news/gt-scale-capture.py` for that pattern).
+  matters (see `../mac-news/gt-scale-capture.swift` for that pattern).
 - Sim must be booted with News past Welcome (use `../sim-local/` unlock);
   ~9 s settle per article, serial. `UDID` env override.

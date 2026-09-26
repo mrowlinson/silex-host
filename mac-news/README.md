@@ -15,11 +15,12 @@ ANF_CORPUS=<corpus-dir> ./mac-news-scale <queue.tsv> <outdir> <start> <count>
 then PASS iff the window title matches the corpus title AND the pixels beat
 size/ink thresholds (else REVIEW — fail closed, never silent).
 
-## gt-scale-capture.py (identity-proof arm)
+## gt-scale-capture.swift (identity-proof arm)
 
 ```sh
+./build.sh                       # one-time: swiftc gt-scale-capture.swift -> ./gt-scale-capture (no Pillow/python)
 cd news-capture && swift build   # -> .build/debug/news-capture (ScreenCaptureKit full-body capture)
-./gt-scale-capture.py --manifest <corpus>/manifest.tsv --count 20 --out <dir> --tools <news-capture-dir>
+./gt-scale-capture --manifest <corpus>/manifest.tsv --count 20 --out <dir> --tools <news-capture-dir>
 ```
 
 Same capture loop, plus an identity chain: the freshly-cached News

@@ -1,8 +1,6 @@
 #!/bin/sh
-# build.sh — compile the mac-news Swift tools (no dependencies beyond Xcode CLT).
-# Usage: ./build.sh   (run from this directory)
+# Build the gt-scale-capture binary (Swift, Foundation+ImageIO/CoreGraphics only).
 set -e
 cd "$(dirname "$0")"
-swiftc -O winlist.swift -o winlist
-swiftc -O mac-news-scale.swift -o mac-news-scale
-echo "built: winlist mac-news-scale"
+swiftc -O -o gt-scale-capture gt-scale-capture.swift
+echo "built ./gt-scale-capture"
