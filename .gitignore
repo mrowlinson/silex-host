@@ -6,3 +6,5 @@ manifest.tsv
 __pycache__/
 .DS_Store
 **/.build/
+sim-local/discriminate
+mac-news/gt-scale-capture

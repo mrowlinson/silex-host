@@ -30,8 +30,9 @@ garbage-ID URL, which routes to the identical blank shell).
 
 ## Verdict (two legs, both required)
 
-1. **Pixel**: downscaled candidate vs blank ref (`discriminate.py`, stdlib
-   only) — renders read 6–66% nonwhite vs ~0.8% for the shell.
+1. **Pixel**: downscaled candidate vs blank ref (`discriminate`, Swift
+   single-file, Foundation+ImageIO only — build once with `./build.sh`) —
+   renders read 6–66% nonwhite vs ~0.8% for the shell.
 2. **AX title**: ≥2 significant title words + a ScrollArea in the `idb`
    accessibility dump. This leg catches stale renders: when navigation fails
    silently the pixels can be a pixel-identical *previous* article.
