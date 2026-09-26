@@ -3,11 +3,11 @@
 Two scripts, same idea: corpus slugs are `apple.news` IDs, so open the live
 URL in macOS News and capture the window.
 
-## mac-news-scale.py (fast arm)
+## mac-news-scale (fast arm)
 
 ```sh
-swiftc winlist.swift -o winlist   # one-time: window lister
-ANF_CORPUS=<corpus-dir> ./mac-news-scale.py <queue.tsv> <outdir> <start> <count>
+./build.sh   # one-time: builds winlist + mac-news-scale (Swift, no Pillow)
+ANF_CORPUS=<corpus-dir> ./mac-news-scale <queue.tsv> <outdir> <start> <count>
 ```
 
 `queue.tsv`: `dir<TAB>slug` per line. Per row: opens
