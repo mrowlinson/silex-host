@@ -14,9 +14,12 @@ planted, nothing touches disk.
 
 ## Verdict
 
-`pngvar.py` (needs Pillow) prints variance + distinct-color count over a
-downscaled frame. Calibrated: blank shell var≈243/colors≈218; renders
+`pngvar` (Swift, no dependencies beyond macOS) prints variance +
+distinct-color count over a downscaled frame. Build once with
+`./build.sh`. Calibrated: blank shell var≈243/colors≈218; renders
 var≈2700–12500/colors≈900–8900. Cutoff: var > 1500 AND colors > 500.
+Verified bit-near-identical to the former Pillow implementation on 24
+renders + blank (max Δvar=1, Δcolors=2, all verdicts agree).
 Unknown slugs are ignored by News (no navigation) — they fail closed as
 blank, they don't error.
 

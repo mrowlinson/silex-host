@@ -2,7 +2,7 @@
 # sim-article-render.sh — render corpus articles via real sim News engine.
 # For each article slug (Apple ID = corpus <dir>/<slug>.json basename),
 # fires applenews://article/<slug> and screenshots. Verdict per shot via
-# pixel-variance discriminator vs known-blank reference (see pngvar.py).
+# pixel-variance discriminator vs known-blank reference (see pngvar.swift).
 # Usage: Tools/sim-article-render.sh candidates.tsv outdir [start [count]]
 # candidates.tsv: slug<TAB>host<TAB>dir<TAB>title (header row skipped)
 set -u
@@ -26,7 +26,9 @@ tail -n +2 "$CAND" | while IFS=$'\t' read -r slug host dir title; do
   sleep 9
   png="$OUT/$slug.png"
   xcrun simctl io "$UDID" screenshot "$png" >/dev/null 2>&1
-  read -r var ncolors < <(python3 "$(dirname "$0")/pngvar.py" "$png")
+  PNGVAR="$(dirname "$0")/pngvar"
+  [ -x "$PNGVAR" ] || "$(dirname "$0")/build.sh" >&2
+  read -r var ncolors < <("$PNGVAR" "$png")
   echo "  var=$var colors=$ncolors bytes=$(stat -f %z "$png")"
   printf '%s\t%s\t%s\tSHOT\t%s\t%s\n' "$slug" "$host" "$dir" "$var" "$ncolors" >> "$OUT/RESULTS.tsv"
   done_n=$((done_n+1))
