@@ -42,7 +42,7 @@ if [ ! -f "$BLANKREF" ]; then
 fi
 
 TOOLS_DIR="$(cd "$(dirname "$0")" && pwd)"
-DISCRIMINATE="$TOOLS_DIR/discriminate.py"
+DISCRIMINATE="$TOOLS_DIR/discriminate"
 
 ID=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('identifier',''))" "$ART")
 [ -n "$ID" ] || { echo "RENDER-FAIL: no identifier in $ART"; exit 1; }
@@ -70,7 +70,7 @@ idb ui describe-all --udid "$UDID" > "$OUT/ax.json" 2>/dev/null \
 # Leg 1: pixel vs blank (downscaled for speed; blank nonwhite ~0.8%).
 sips -Z 300 "$OUT/after.png" --out "$OUT/after-small.png" >/dev/null 2>&1
 sips -Z 300 "$BLANKREF" --out "$OUT/blank-small.png" >/dev/null 2>&1
-PIXEL=$(python3 "$DISCRIMINATE" "$OUT/after-small.png" "$OUT/blank-small.png" 2>&1 | grep -c DISTINCT-RENDER || true)
+PIXEL=$("$DISCRIMINATE" "$OUT/after-small.png" "$OUT/blank-small.png" 2>&1 | grep -c DISTINCT-RENDER || true)
 
 # Leg 2: AX must contain >=2 significant title words + a ScrollArea.
 AXHIT=$(TITLE="$TITLE" python3 -c "
