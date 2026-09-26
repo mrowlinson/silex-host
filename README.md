@@ -1,90 +1,91 @@
-# silex-host — render ANF with Apple's real engine, in-process
+# silex-host — render Apple News Format with Apple's own engine
 
-Renders Apple News Format `article.json` files using the actual Apple layout +
-text engine: the system's macCatalyst `Silex.framework` (+ Tangier), hosted in
-a minimal CLI. No simulator, no News.app, no network. Offline, batchable,
-~10–15 s/article.
+`article.json` in, PNG out — laid out and typeset by the real Apple News
+rendering stack, with no simulator, no News app, and no network.
 
 ```sh
-./build.sh                                  # -> ./render (arm64e macabi)
-./render article.json out.png               # default 390x844 (@2x PNG)
-./render article.json out.png 1024x1366     # custom viewport
-./batch.sh <corpus-dir> <list.tsv> <out>    # manifest.tsv + png/ + verdicts
+./build.sh                               # -> ./render (Apple Silicon, macCatalyst)
+./render article.json out.png            # default 390x844 viewport (@2x PNG)
+./render article.json out.png 1024x1366  # custom viewport
+./batch.sh <corpus-dir> <list.tsv> <out> # render many; writes manifest.tsv + png/
 ```
 
-`list.tsv`: one `dir<TAB>slug` per line, files at `<corpus-dir>/<dir>/<slug>.json`
-(see [examples/list.tsv](examples/list.tsv)). `SILEX_DEBUG=1` enables view-tree
-+ blueprint debug logs.
+`list.tsv` is one article per line — `<directory><TAB><slug>`, resolved to
+`<corpus-dir>/<directory>/<slug>.json` (see
+[examples/list.tsv](examples/list.tsv)). `SILEX_DEBUG=1` turns on view-tree
+and layout debug logging.
 
-Text and typography render fully. Remote photos/videos/embeds reserve layout
-space but stay blank (no image data source is wired — see Limitations).
+## Why this exists
 
-## How this was found
+If you work with Apple News Format — building a renderer, studying layouts,
+regression-testing feed output — you need ground truth: *what would Apple
+itself draw for this file?* The obvious ways to get it all hurt:
 
-This tool came out of the ANFRenderer project, which needed real-engine renders
-of hundreds of ANF articles to compare against a clean-room renderer — one
-hand-picked article is not ground truth. Every app-driven path fought back:
+- **Simulator + News app.** The `applenews://preview/…` route validates its
+  channel against the device's channel store and silently refuses unknown
+  ones; the `applenews://article/…` route works but fetches Apple's live
+  server copy, not your local bytes. Either way you're nursing a stateful,
+  single-user simulator.
+- **macOS News automation.** Works, and scales to dozens of articles — but
+  again server-backed, app-bound, and slow.
+- **News Preview.app.** The one Apple tool that opens local JSON directly —
+  when it doesn't crash, and once you've clicked through its first-launch
+  license gate.
 
-1. **Sim News preview route** (`applenews://preview/<channel>/<id>` with a
-   planted `LocalDrafts/<channel>/<id>/article.json`): dead on arrival with a
-   fake channel — the flow validates the channel against the sim's channel
-   store (`NAArticleUnavailablePreviewChannelMessage`) or sits in a spinner
-   shell that issues zero reads. A *real* channel ID (harvested from feed logs)
-   does unlock it, but the sim is single-user, stateful, and slow.
-2. **Live-URL routes** (`applenews://article/<id>` in-sim, `apple.news/<slug>`
-   in macOS News): these render, and at real scale (24/24, 28/30 batches), but
-   every pixel is server-backed — you are rendering Apple's live copy, not your
-   local file — and both arms are slow, stateful app automation.
-3. **News Preview.app** (renders local JSON directly!): EULA-gated on first
-   launch and crash-prone under Rosetta on an Apple Silicon host.
-4. **In-process hosting** (this repo): macOS ships macCatalyst Silex in
-   `/System/iOSSupport` inside the shared cache. Instead of driving an app,
-   `dlopen` the framework and assemble the pipeline by hand — `SXDocument` +
-   DOM, layout engine + sizer factories, component view engine + view
-   factories, `SXTangierController` text flows — then snapshot a windowless
-   `CALayer` to PNG. All classes/selectors resolved at runtime
-   (`NSClassFromString` / `NSSelectorFromString` / `NSInvocation`); no private
-   headers; the engine itself untouched. The only swizzles are harness-side:
-   DOM injection into layout tasks, and default-handling of WebKit auth
-   challenges so embeds don't abort offline.
+`silex-host` sidesteps apps entirely. macOS ships the News layout engine —
+macCatalyst `Silex.framework` plus Tangier text — in `/System/iOSSupport`,
+inside the shared cache. This tool `dlopen`s it and assembles a render
+pipeline by hand: document + DOM, layout engine and sizer factories,
+component view engine and view factories, Tangier text flows — then snapshots
+a windowless layer to PNG. Every class and selector is resolved at runtime;
+there are no private headers and no Apple code in this repo. The engine
+itself is untouched — the only patches are harness-side (feeding the DOM
+into layout tasks, and default-handling WebKit auth challenges so offline
+embeds don't abort).
 
-First batch: 24/24 corpus articles PASS with a measured blank-vs-render
-discriminator (blanks score exactly 0.0000 nonwhite). The tool has since been
-used as the bulk ground-truth oracle: fast enough to run hundreds of articles,
-exact enough to diff text/layout against.
-
-## Requirements
-
-- Apple Silicon Mac, macOS 15+
-- Xcode command-line tools (`xcrun clang` with the macCatalyst SDK)
-- Python 3 + Pillow (only for `batch.sh`'s ink discriminator)
+The result is a hermetic oracle: same bytes in, same pixels out, ~10–15
+seconds per article, trivially parallelized at the shell level.
 
 ## Output
 
-`render` prints one `RESULT … status=OK title=… dom=<n> presented=<n>
-bpsize=<WxH>` line per article (plus harmless Tangier teardown assertions on
-stderr). `batch.sh` writes `<out>/manifest.tsv`:
+Each render prints one machine-readable line:
+
+```
+RESULT … status=OK title=… dom=<n> presented=<n> bpsize=<WxH>
+```
+
+(`dom` = component count, `presented` = views produced — a quick integrity
+signal. Harmless Tangier teardown assertions may appear on stderr.)
+
+`batch.sh` renders a whole list and writes `<out>/manifest.tsv`
+([sample](examples/manifest-sample.tsv)):
 
 ```
 dir  slug  title  comps  presented  bpsize  png  bytes  nonwhite_frac  verdict
 ```
 
-`verdict=PASS` iff `status=OK` and nonwhite fraction > 0.005. `comps` is the
-DOM component count, `presented` how many produced views — a quick integrity
-signal per article.
+`verdict=PASS` means the render exited OK *and* beat a measured
+blank-page discriminator (genuinely blank renders score exactly 0.0000
+nonwhite pixels).
+
+## Requirements
+
+- Apple Silicon Mac, macOS 15 or later
+- Xcode command-line tools (for `xcrun clang` + the macCatalyst SDK)
+- Python 3 + Pillow (only for `batch.sh`'s ink measurement)
 
 ## Limitations
 
-- Remote resources (photos, videos, embeds) have no data source: layout
-  reserves their space, pixels stay blank. Wiring an image store is the single
-  biggest upgrade available.
+- **Remote images, videos, and embeds render blank.** Layout reserves their
+  space, but no image data source is wired — text and typography are exact,
+  photography is not. This is the single biggest possible upgrade.
 - One fixed viewport per run; no ads, dark mode, or interaction.
-- Single article per process; parallelize at the shell level (4 concurrent
-  renders is a safe default).
-- arm64e macABI only; depends on system Silex behavior, which Apple can change.
+- One article per process (run several in parallel; 4 concurrent is safe).
+- It hosts system frameworks, so output can shift with macOS updates. Pin
+  your baselines per OS version.
 
-## Provenance
+## Notes
 
-Extracted 2026-09-25 from the ANFRenderer project's T4-mac-news lane. This repo
-contains only original interop glue — no Apple code, no article content.
-Your ANF files never leave the machine.
+- Everything runs locally; your ANF files never leave the machine.
+- This repo contains only original interop glue — no Apple code, no article
+  content, no private headers.
