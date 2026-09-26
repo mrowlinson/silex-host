@@ -1,92 +1,66 @@
-# silex-host — render Apple News Format with Apple's own engine
+# Real-engine ANF rendering
 
-`article.json` in, PNG out — laid out and typeset by the real Apple News
-rendering stack, with no simulator, no News app, and no network.
+Five ways to render Apple News Format with Apple's own engines — built while
+looking for ground truth good enough to diff a clean-room renderer against.
+This repo started life as just `silex-host/`; it now collects every working
+(and one experimental) method, each self-contained with its scripts.
 
-```sh
-./build.sh                               # -> ./render (Apple Silicon, macCatalyst)
-./render article.json out.png            # default 390x844 viewport (@2x PNG)
-./render article.json out.png 1024x1366  # custom viewport
-./batch.sh <corpus-dir> <list.tsv> <out> # render many; writes manifest.tsv + png/
-```
+| Method | Input | Fidelity | Speed | Needs |
+|---|---|---|---|---|
+| [`silex-host/`](silex-host/) | your local file | text-exact; photos blank | ~12 s, offline, parallel | Apple Silicon Mac |
+| [`sim-local/`](sim-local/) | your local file | full app incl. remote assets | ~30 s, serial | booted sim + `idb` |
+| [`sim-url/`](sim-url/) | live server copy by slug | full app | ~10 s, serial | booted sim |
+| [`mac-news/`](mac-news/) | live server copy by slug | full app window | ~15 s, serial | macOS News + network |
+| [`news-preview/`](news-preview/) | your local file | — | — | EXPERIMENTAL, unproven |
 
-`list.tsv` is one article per line — `<directory><TAB><slug>`, resolved to
-`<corpus-dir>/<directory>/<slug>.json` (see
-[examples/list.tsv](examples/list.tsv)). `SILEX_DEBUG=1` turns on view-tree
-and layout debug logging.
+Rule of thumb: `silex-host` for bulk text/layout truth (hundreds of articles,
+offline), `sim-local` when you need full-page pixels of your own bytes,
+the URL arms when server-backed truth is acceptable, `news-preview` only if
+you're on Intel hardware and feeling lucky.
 
-## Why this exists
+Every method ships its discriminator (no silent blank-shell passes) and a
+manifest format; every row fails closed (`REVIEW`/`FAIL`/`IDENT-FAIL`).
 
-If you work with Apple News Format — building a renderer, studying layouts,
-regression-testing feed output — you need ground truth: *what would Apple
-itself draw for this file?* The obvious ways to get it all hurt:
+## How this was found
 
-- **Simulator + News app.** The `applenews://preview/…` route validates its
-  channel against the device's channel store and silently refuses unknown
-  ones; the `applenews://article/…` route works but fetches Apple's live
-  server copy, not your local bytes. Either way you're nursing a stateful,
-  single-user simulator.
-- **macOS News automation.** Works, and scales to dozens of articles — but
-  again server-backed, app-bound, and slow.
-- **News Preview.app.** The one Apple tool that opens local JSON directly —
-  but it's Intel-only (x86_64), so on Apple Silicon it runs under Rosetta
-  and crashes on the devices queue (the arm64e-only CoreSimulator can't load
-  into the translated process). Dead end on modern Macs.
+The job was ground truth for hundreds of ANF articles — one hand-picked file
+is not a test. Each method below was earned by a dead end:
 
-`silex-host` sidesteps apps entirely. macOS ships the News layout engine —
-macCatalyst `Silex.framework` plus Tangier text — in `/System/iOSSupport`,
-inside the shared cache. This tool `dlopen`s it and assembles a render
-pipeline by hand: document + DOM, layout engine and sizer factories,
-component view engine and view factories, Tangier text flows — then snapshots
-a windowless layer to PNG. Every class and selector is resolved at runtime;
-there are no private headers and no Apple code in this repo. The engine
-itself is untouched — the only patches are harness-side (feeding the DOM
-into layout tasks, and default-handling WebKit auth challenges so offline
-embeds don't abort).
+- The sim `applenews://preview/…` route plants `article.json` in
+  `LocalDrafts/<channel>/<id>/` — but only for channels the sim's News store
+  knows. Fake channels die in a spinner shell that issues zero reads (which
+  is why filesystem tracing "proved" nothing loaded). A *real* channel ID
+  unlocks full renders of arbitrary local files → `sim-local/`.
+- The sim `applenews://article/<id>` route skips planting entirely and renders
+  the live copy → `sim-url/`. Multipeer `onDevicePreview` was fully
+  reverse-engineered (message structs, both ends) and then found doubly dead:
+  no browse response, and the sim handlers are single-`ret` stubs.
+- Corpus slugs turned out to be `apple.news` IDs, so macOS News opens them
+  directly; the cached assetstore copy proves each capture is the same
+  article → `mac-news/`.
+- News Preview.app opens local JSON directly — but it's Intel-only and
+  crashes on the devices queue under Rosetta on Apple Silicon, and wants a
+  manual EULA click. Kept as an experiment, not a path → `news-preview/`.
+- Finally: macOS ships macCatalyst Silex in `/System/iOSSupport`. Instead of
+  driving any app, `dlopen` the framework and assemble document → layout →
+  views → Tangier text by hand, all selectors resolved at runtime, no private
+  headers, engine untouched → `silex-host/`.
 
-The result is a hermetic oracle: same bytes in, same pixels out, ~10–15
-seconds per article, trivially parallelized at the shell level.
-
-## Output
-
-Each render prints one machine-readable line:
+## Layout
 
 ```
-RESULT … status=OK title=… dom=<n> presented=<n> bpsize=<WxH>
+silex-host/    in-process Silex CLI + batch wrapper
+sim-local/     sim plant+fire+discriminate (your bytes, full app)
+sim-url/       sim live-slug batch renderer + variance discriminator
+mac-news/      News.app scale capture + assetstore identity proof + news-capture/
+news-preview/  NP pipe pieces (experimental) + crash-dodge shim
+examples/      list.tsv, candidates.tsv, manifest-sample.tsv
 ```
-
-(`dom` = component count, `presented` = views produced — a quick integrity
-signal. Harmless Tangier teardown assertions may appear on stderr.)
-
-`batch.sh` renders a whole list and writes `<out>/manifest.tsv`
-([sample](examples/manifest-sample.tsv)):
-
-```
-dir  slug  title  comps  presented  bpsize  png  bytes  nonwhite_frac  verdict
-```
-
-`verdict=PASS` means the render exited OK *and* beat a measured
-blank-page discriminator (genuinely blank renders score exactly 0.0000
-nonwhite pixels).
-
-## Requirements
-
-- Apple Silicon Mac, macOS 15 or later
-- Xcode command-line tools (for `xcrun clang` + the macCatalyst SDK)
-- Python 3 + Pillow (only for `batch.sh`'s ink measurement)
-
-## Limitations
-
-- **Remote images, videos, and embeds render blank.** Layout reserves their
-  space, but no image data source is wired — text and typography are exact,
-  photography is not. This is the single biggest possible upgrade.
-- One fixed viewport per run; no ads, dark mode, or interaction.
-- One article per process (run several in parallel; 4 concurrent is safe).
-- It hosts system frameworks, so output can shift with macOS updates. Pin
-  your baselines per OS version.
 
 ## Notes
 
-- Everything runs locally; your ANF files never leave the machine.
+- Everything runs locally; article files never leave the machine (URL arms
+  fetch Apple's live copies by design).
 - This repo contains only original interop glue — no Apple code, no article
   content, no private headers.
+- System frameworks move under you: pin baselines per OS/Sim/News version.
