@@ -264,7 +264,7 @@ func main() {
                 continue
             }
             let before = newsWindows(bin: bin)
-            runCapture("/usr/bin/open", ["-a", "News", "https://apple.news/\(slug)"])
+            runCapture("/usr/bin/env", ["open", "-a", "News", "https://apple.news/\(slug)"])
             Thread.sleep(forTimeInterval: 9)
             let after = newsWindows(bin: bin)
             let new = after.keys.filter { before[$0] == nil }.sorted()
@@ -275,7 +275,7 @@ func main() {
             }
             let wid = new.last!
             let png = "\(outdir)/pngs/\(String(format: "%02d", idx))-\(slug).png"
-            runCapture("/usr/bin/screencapture", ["-l\(wid)", "-x", png])
+            runCapture("/usr/bin/env", ["screencapture", "-l\(wid)", "-x", png])
             Thread.sleep(forTimeInterval: 1)
             guard let s = stats(png: png) else {
                 oprint("[\(idx)] \(slug) CAP-FAIL cannot decode \(png)")
