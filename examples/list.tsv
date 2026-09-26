@@ -1,0 +1,6 @@
+# list.tsv — one article per line: <publisher-dir><TAB><article-slug>
+# Files resolve to <corpus-dir>/<dir>/<slug>.json ; lines starting with # are skipped.
+# (Slugs below are real-world-shaped examples — replace with your own rows.)
+ABC News	A-59LUGjyQheB7RXEJEJgOw
+Al Jazeera	A-57id4zMQUWNzq5oAZ9Epg
+9to5Google	A-HYVVHAqT8CCehkUXmOEsg

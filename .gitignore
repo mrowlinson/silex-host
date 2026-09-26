@@ -1,0 +1,7 @@
+render
+*.png
+out/
+png/
+manifest.tsv
+__pycache__/
+.DS_Store
