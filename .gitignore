@@ -8,3 +8,4 @@ __pycache__/
 **/.build/
 sim-local/discriminate
 mac-news/gt-scale-capture
+tmp/
